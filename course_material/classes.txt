@@ -1,0 +1,6 @@
+1) Introduction
+2) Tool use
+3)  Memory
+4) Planification and architectures
+5) Control :3
+6) Evaluation and alignment
