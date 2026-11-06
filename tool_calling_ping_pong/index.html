@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Function Calling — The Ping-Pong Rally Visualizer</title>
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --surface: #f8fafc;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --app-green: #059669;
+      --app-bg: rgba(16, 185, 129, 0.12);
+      --app-border: rgba(16, 185, 129, 0.38);
+      --llm-blue: #2563eb;
+      --llm-bg: rgba(37, 99, 235, 0.10);
+      --llm-border: rgba(37, 99, 235, 0.35);
+      --amber: #d97706;
+      --amber-bg: rgba(245, 158, 11, 0.14);
+      --amber-border: rgba(245, 158, 11, 0.38);
+      --purple: #7c3aed;
+      --purple-bg: rgba(124, 58, 237, 0.12);
+      --shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    html.dark {
+      --bg: #0b0f19;
+      --card: #111827;
+      --surface: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --app-green: #34d399;
+      --app-bg: rgba(16, 185, 129, 0.16);
+      --app-border: rgba(16, 185, 129, 0.45);
+      --llm-blue: #60a5fa;
+      --llm-bg: rgba(59, 130, 246, 0.16);
+      --llm-border: rgba(59, 130, 246, 0.45);
+      --amber: #fbbf24;
+      --amber-bg: rgba(245, 158, 11, 0.18);
+      --amber-border: rgba(245, 158, 11, 0.45);
+      --purple: #a78bfa;
+      --purple-bg: rgba(139, 92, 246, 0.18);
+      --shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+      padding: 18px 20px;
+      line-height: 1.45;
+      user-select: none;
+    }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    /* Header */
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .title-group h1 {
+      font-size: 19px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .title-group p {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .controls-group {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 7px 13px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .btn:hover:not(:disabled) {
+      border-color: var(--llm-blue);
+    }
+
+    .btn:disabled {
+      opacity: 0.38;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #2563eb;
+    }
+
+    .btn-amber {
+      background: #d97706;
+      color: #ffffff;
+      border-color: #d97706;
+    }
+
+    .select-box {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Scenario Selector Bar */
+    .scenario-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding-top: 12px;
+      margin-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .scenario-pills {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .scen-btn {
+      background: var(--surface);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .scen-btn.active {
+      background: var(--llm-bg);
+      color: var(--llm-blue);
+      border-color: var(--llm-border);
+      font-weight: 700;
+    }
+
+    /* Main 2-Column Layout */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 7fr 5fr;
+      gap: 14px;
+    }
+
+    @media (max-width: 900px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Ping-Pong Arena */
+    .arena-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+
+    .players-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .player-card {
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 13.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .player-app {
+      background: var(--app-bg);
+      border: 2px solid var(--app-border);
+      color: var(--app-green);
+    }
+
+    .player-llm {
+      background: var(--llm-bg);
+      border: 2px solid var(--llm-border);
+      color: var(--llm-blue);
+    }
+
+    .player-active {
+      transform: scale(1.04);
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.18);
+    }
+
+    .player-sub {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    /* Ping-Pong Table Track */
+    .court-track {
+      position: relative;
+      height: 68px;
+      background: var(--card);
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Center Net */
+    .court-net {
+      position: absolute;
+      left: 50%;
+      top: 6px;
+      bottom: 6px;
+      width: 2px;
+      background: repeating-linear-gradient(
+        to bottom,
+        var(--muted) 0px,
+        var(--muted) 5px,
+        transparent 5px,
+        transparent 10px
+      );
+      opacity: 0.45;
+    }
+
+    .net-label {
+      position: absolute;
+      top: -9px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface);
+      padding: 0 6px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* Animated Ping-Pong Ball + Packet Pill */
+    .ball-wrapper {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      transition: left 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      z-index: 5;
+    }
+
+    .ping-pong-ball {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 32% 32%, #ffffff, #f59e0b 65%, #d97706 100%);
+      box-shadow: 0 3px 10px rgba(245, 158, 11, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .ball-packet-label {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 700;
+      white-space: nowrap;
+      box-shadow: var(--shadow);
+    }
+
+    /* Sequence Diagram Steps (inspired by Course Page 10) */
+    .seq-list {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .seq-row {
+      display: grid;
+      grid-template-columns: 30px 1fr 110px;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      cursor: pointer;
+      transition: all 0.16s ease;
+    }
+
+    .seq-row:hover {
+      border-color: var(--llm-blue);
+    }
+
+    .seq-row.active {
+      background: var(--llm-bg);
+      border-color: var(--llm-border);
+      box-shadow: 0 0 0 1px var(--llm-border);
+    }
+
+    .seq-row.done {
+      opacity: 0.85;
+    }
+
+    .seq-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      background: var(--card);
+      border: 1px solid var(--border);
+    }
+
+    .seq-row.active .seq-num {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #2563eb;
+    }
+
+    .seq-row.done .seq-num {
+      background: var(--app-bg);
+      color: var(--app-green);
+      border-color: var(--app-border);
+    }
+
+    .seq-title {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .seq-dir {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-align: right;
+      padding: 2px 8px;
+      border-radius: 6px;
+      justify-self: end;
+    }
+
+    .dir-to-llm { background: var(--llm-bg); color: var(--llm-blue); }
+    .dir-to-app { background: var(--app-bg); color: var(--app-green); }
+    .dir-self-llm { background: var(--purple-bg); color: var(--purple); }
+    .dir-self-app { background: var(--amber-bg); color: var(--amber); }
+
+    /* Right Column: Step Explanation & Live Context Inspector */
+    .right-col {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .step-banner {
+      border-left: 4px solid #2563eb;
+    }
+
+    .step-badge-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .step-tag {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--llm-blue);
+    }
+
+    .key-insight {
+      margin-top: 10px;
+      padding: 8px 11px;
+      border-radius: 8px;
+      background: var(--amber-bg);
+      border: 1px solid var(--amber-border);
+      color: var(--amber);
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+
+    /* Live Messages / Payload Stack */
+    .msg-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .msg-bubble {
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 12.5px;
+      transition: all 0.2s ease;
+    }
+
+    .msg-bubble.latest {
+      border-width: 2px;
+      border-color: var(--llm-blue);
+    }
+
+    .msg-role {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .role-sys  { color: var(--muted); }
+    .role-user { color: var(--app-green); }
+    .role-llm  { color: var(--llm-blue); }
+    .role-tool { color: var(--amber); }
+
+    pre.code-block {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- 1. TOP HEADER & CONTROLS -->
+    <div class="card">
+      <div class="header-row">
+        <div class="title-group">
+          <h1>Function Calling: The "Ping-Pong" Rally</h1>
+          <p>Interactive walkthrough of how an Application and an LLM exchange messages to execute tools (Course Section I.3)</p>
+        </div>
+
+        <div class="controls-group">
+          <button class="btn" onclick="goToStep(0)">⏮ Restart</button>
+          <button id="btn-prev" class="btn" onclick="prevStep()">◀ Prev</button>
+          <button id="btn-play" class="btn btn-primary" onclick="togglePlay()">▶ Play Rally</button>
+          <button id="btn-next" class="btn" onclick="nextStep()">Next ▶</button>
+          <select id="speed-select" class="select-box" onchange="updateSpeed()">
+            <option value="2800">Slow</option>
+            <option value="1800" selected>Normal</option>
+            <option value="1000">Fast</option>
+          </select>
+          <button class="btn" onclick="document.documentElement.classList.toggle('dark')" title="Toggle Light/Dark Mode">🌓</button>
+        </div>
+      </div>
+
+      <!-- Scenario Switcher (from Page 11 of the Course) -->
+      <div class="scenario-bar">
+        <div class="scenario-pills">
+          <button id="scen-weather" class="scen-btn active" onclick="setScenario('weather')">
+            🌦️ "What is the weather in Paris?" (Full 6-Step Tool Rally)
+          </button>
+          <button id="scen-horoscope" class="scen-btn" onclick="setScenario('horoscope')">
+            ♒ "Get today's horoscope for Aquarius" (Course p. 11 Example)
+          </button>
+          <button id="scen-inalco" class="scen-btn" onclick="setScenario('inalco')">
+            🏛️ "When was INALCO founded?" (No Tool Needed — 3-Step Direct Answer)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. MAIN CONTENT: PING-PONG ARENA + LIVE PAYLOAD INSPECTOR -->
+    <div class="main-grid">
+
+      <!-- Left: Ping-Pong Court + 6-Step Course Sequence Diagram -->
+      <div class="card">
+        <div class="arena-box">
+          <div class="players-header">
+            <div id="card-app" class="player-card player-app">
+              <span>💻 Application</span>
+              <span class="player-sub">Host Code &amp; Tool Executor</span>
+            </div>
+
+            <div id="card-llm" class="player-card player-llm">
+              <span>🧠 LLM Model</span>
+              <span class="player-sub">Router &amp; JSON Generator</span>
+            </div>
+          </div>
+
+          <!-- Ping-Pong Table Track -->
+          <div class="court-track">
+            <div class="court-net"></div>
+            <span class="net-label">API Boundary</span>
+
+            <!-- Animated Ball & Packet -->
+            <div id="ball-wrap" class="ball-wrapper" style="left: 18%;">
+              <div id="ball-icon" class="ping-pong-ball">1</div>
+              <div id="ball-label" class="ball-packet-label mono">Prompt + Tool Schemas</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clickable Sequence Steps (from Course Page 10 Diagram) -->
+        <div id="seq-list" class="seq-list"></div>
+      </div>
+
+      <!-- Right: Active Step Details & Growing Context Window -->
+      <div class="right-col">
+
+        <!-- Step Explanation Card -->
+        <div class="card step-banner">
+          <div class="step-badge-row">
+            <span id="step-tag" class="step-tag">Step 1 of 6</span>
+            <span id="ball-owner-badge" class="mono" style="font-size:12px; font-weight:700;"></span>
+          </div>
+          <h2 id="step-heading" style="font-size:16px; font-weight:700; margin-bottom:5px;"></h2>
+          <p id="step-desc" style="font-size:13.5px; color:var(--muted);"></p>
+          <div id="step-insight" class="key-insight"></div>
+        </div>
+
+        <!-- Live Context / Messages Inspector -->
+        <div class="card" style="flex:1;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);">
+              Live Conversation &amp; Payload Trace
+            </span>
+            <span class="mono" style="font-size:11.5px; color:var(--muted);">messages[]</span>
+          </div>
+
+          <div id="msg-stack" class="msg-stack"></div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    const SCENARIOS = {
+      weather: [
+        {
+          num: 1,
+          shortTitle: "1. Application calls LLM with prompt & tool definitions",
+          dirLabel: "App ➔ LLM",
+          dirClass: "dir-to-llm",
+          ballPos: "22%",
+          activeSide: "app",
+          packet: "Prompt + tools[] Schema",
+          ownerText: "🏓 Serve: Application ➔ LLM",
+          heading: "Step 1: Application Sends Prompt + Tool Definitions",
+          desc: "The Application sends the user's question along with the JSON schema (docstring, parameter names, types) of available tools like get_weather(location).",
+          insight: "💡 Behind the scenes: The tool definitions are injected into the LLM's system prompt between special hidden tokens.",
+          messages: [
+            { role: "SYSTEM (Injected Tool Schema)", roleClass: "role-sys", code: "Tools available:\n- get_weather(location: string): Get current weather in a city.\n- play_song(song_name: string): Play a song." },
+            { role: "USER PROMPT", roleClass: "role-user", code: "\"What is the weather in Paris?\"" }
+          ]
+        },
+        {
+          num: 2,
+          shortTitle: "2. LLM acts as a Router: decides to call a tool & generates args",
+          dirLabel: "LLM ↺",
+          dirClass: "dir-self-llm",
+          ballPos: "82%",
+          activeSide: "llm",
+          packet: "Routing + Constrained JSON",
+          ownerText: "🧠 Ball on LLM Side (Routing)",
+          heading: "Step 2: LLM Acts as a Router & Formats Arguments",
+          desc: "The LLM analyzes the prompt. Knowing it cannot check live weather itself, it decides to invoke get_weather and uses Constrained Decoding to generate valid JSON arguments.",
+          insight: "💡 Key Course Concept: Function calling turns the LLM into a router deciding WHEN and HOW a tool should be called.",
+          messages: [
+            { role: "SYSTEM (Injected Tool Schema)", roleClass: "role-sys", code: "Tools: [get_weather(location: str), play_song(song_name: str)]" },
+            { role: "USER PROMPT", roleClass: "role-user", code: "\"What is the weather in Paris?\"" },
+            { role: "LLM INTERNAL DECISION", roleClass: "role-llm", code: "Intent matches get_weather -> Constrain output to schema:\n{ \"name\": \"get_weather\", \"arguments\": { \"location\": \"Paris\" } }" }
+          ]
+        },
+        {
+          num: 3,
+          shortTitle: "3. LLM returns structured tool call (name & arguments) to App",
+          dirLabel: "LLM ➔ App",
+          dirClass: "dir-to-app",
+          ballPos: "46%",
+          activeSide: "llm",
+          packet: "tool_call: get_weather(\"Paris\")",
+          ownerText: "🏓 Return Shot: LLM ➔ Application",
+          heading: "Step 3: LLM Returns Structured Tool Call JSON",
+          desc: "Instead of answering with free text, the LLM replies to the Application with a structured JSON object specifying the function name and extracted arguments.",
+          insight: "💡 Notice: The LLM stops generating here! It has NOT executed the function—it only asks the Application to run it.",
+          messages: [
+            { role: "USER PROMPT", roleClass: "role-user", code: "\"What is the weather in Paris?\"" },
+            { role: "ASSISTANT (Tool Call Request)", roleClass: "role-llm", code: "{\n  \"tool_call\": {\n    \"name\": \"get_weather\",\n    \"arguments\": { \"location\": \"Paris\" }\n  }\n}" }
+          ]
+        },
+        {
+          num: 4,
+          shortTitle: "4. Application parses JSON and executes the Python function",
+          dirLabel: "App ↺",
+          dirClass: "dir-self-app",
+          ballPos: "16%",
+          activeSide: "app",
+          packet: "Executing get_weather(\"Paris\")",
+          ownerText: "💻 Ball on Application Side (Execution)",
+          heading: "Step 4: Application Parses & Executes the Code Locally",
+          desc: "The Application parses the LLM's JSON response, maps \"get_weather\" to the actual Python function in its codebase, and runs get_weather(location=\"Paris\").",
+          insight: "⚠️ Crucial Rule (Course p. 12): The execution itself is ALWAYS handled by the Application, never by the LLM!",
+          messages: [
+            { role: "ASSISTANT (Tool Call Request)", roleClass: "role-llm", code: "{ \"name\": \"get_weather\", \"arguments\": { \"location\": \"Paris\" } }" },
+            { role: "APPLICATION RUNTIME (Python)", roleClass: "role-tool", code: "# Executed by host application:\nresult = get_weather(location=\"Paris\")\n# Returns: {\"temp\": \"18°C\", \"condition\": \"Sunny\"}" }
+          ]
+        },
+        {
+          num: 5,
+          shortTitle: "5. Application sends tool result (observation) back to LLM",
+          dirLabel: "App ➔ LLM",
+          dirClass: "dir-to-llm",
+          ballPos: "56%",
+          activeSide: "app",
+          packet: "Observation: {\"temp\": \"18°C\"}",
+          ownerText: "🏓 Second Serve: Application ➔ LLM",
+          heading: "Step 5: Application Feeds Tool Result Back as an Observation",
+          desc: "The Application appends the result of the function call to the conversation history as a tool observation and calls the LLM a second time.",
+          insight: "💡 The LLM now has the factual external data in its context window so it doesn't have to hallucinate!",
+          messages: [
+            { role: "USER PROMPT", roleClass: "role-user", code: "\"What is the weather in Paris?\"" },
+            { role: "ASSISTANT (Tool Call)", roleClass: "role-llm", code: "get_weather(location=\"Paris\")" },
+            { role: "TOOL OBSERVATION (Added by App)", roleClass: "role-tool", code: "{\"location\": \"Paris\", \"temperature\": \"18°C\", \"condition\": \"Sunny\"}" }
+          ]
+        },
+        {
+          num: 6,
+          shortTitle: "6. LLM generates final natural-language answer for the user",
+          dirLabel: "LLM ➔ App",
+          dirClass: "dir-to-app",
+          ballPos: "18%",
+          activeSide: "llm",
+          packet: "\"It's 18°C and sunny in Paris.\"",
+          ownerText: "🏁 Rally Point Complete: Final Answer",
+          heading: "Step 6: LLM Synthesizes the Final Answer",
+          desc: "Seeing the tool observation in its context, the LLM decides no more tools are needed and generates a fluent final response integrating the tool's output.",
+          insight: "✅ Rally complete! Total LLM calls: 2 (Call #1 to route & pick arguments, Call #2 to formulate the final answer).",
+          messages: [
+            { role: "USER PROMPT", roleClass: "role-user", code: "\"What is the weather in Paris?\"" },
+            { role: "TOOL OBSERVATION", roleClass: "role-tool", code: "{\"location\": \"Paris\", \"temperature\": \"18°C\", \"condition\": \"Sunny\"}" },
+            { role: "ASSISTANT (Final Response)", roleClass: "role-llm", code: "\"The current weather in Paris is sunny with a temperature of 18°C.\"" }
+          ]
+        }
+      ],
+
+      horoscope: [
+        {
+          num: 1,
+          shortTitle: "1. Application calls LLM with prompt & get_horoscope schema",
+          dirLabel: "App ➔ LLM",
+          dirClass: "dir-to-llm",
+          ballPos: "22%",
+          activeSide: "app",
+          packet: "Prompt + get_horoscope Schema",
+          ownerText: "🏓 Serve: Application ➔ LLM",
+          heading: "Step 1: Application Sends Prompt + Horoscope Tool Schema",
+          desc: "From Course Page 11: The developer passes the JSON schema for get_horoscope(sign: string) along with the user's question.",
+          insight: "💡 Schema requires: \"sign\" (string, e.g. \"Taurus\" or \"Aquarius\").",
+          messages: [
+            { role: "SYSTEM (Tool Schema from Course p. 11)", roleClass: "role-sys", code: "{\n  \"name\": \"get_horoscope\",\n  \"description\": \"Get today's horoscope for an astrological sign.\",\n  \"parameters\": { \"properties\": { \"sign\": { \"type\": \"string\" } }, \"required\": [\"sign\"] }\n}" },
+            { role: "USER PROMPT", roleClass: "role-user", code: "\"What is today's horoscope for Aquarius?\"" }
+          ]
+        },
+        {
+          num: 2,
+          shortTitle: "2. LLM decides to use get_horoscope and extracts \"Aquarius\"",
+          dirLabel: "LLM ↺",
+          dirClass: "dir-self-llm",
+          ballPos: "82%",
+          activeSide: "llm",
+          packet: "Select get_horoscope",
+          ownerText: "🧠 Ball on LLM Side (Routing)",
+          heading: "Step 2: LLM Selects get_horoscope & Extracts Sign",
+          desc: "The LLM recognizes that today's horoscope requires calling get_horoscope and extracts \"Aquarius\" for the required \"sign\" parameter.",
+          insight: "💡 Constrained decoding guarantees the arguments object strictly adheres to {\"sign\": \"Aquarius\"}.",
+          messages: [
+            { role: "USER PROMPT", roleClass: "role-user", code: "\"What is today's horoscope for Aquarius?\"" },
+            { role: "LLM ROUTER", roleClass: "role-llm", code: "Selected tool: get_horoscope\nExtracted argument: { \"sign\": \"Aquarius\" }" }
+          ]
+        },
+        {
+          num: 3,
+          shortTitle: "3. LLM returns structured tool_call JSON to Application",
+          dirLabel: "LLM ➔ App",
+          dirClass: "dir-to-app",
+          ballPos: "46%",
+          activeSide: "llm",
+          packet: "get_horoscope(sign=\"Aquarius\")",
+          ownerText: "🏓 Return Shot: LLM ➔ Application",
+          heading: "Step 3: LLM Emits Structured Tool Call",
+          desc: "The LLM returns the structured tool call payload to the Application and pauses.",
+          insight: "💡 The Application now intercepts this structured response instead of showing raw JSON to the end user.",
+          messages: [
+            { role: "ASSISTANT (Tool Call)", roleClass: "role-llm", code: "{\n  \"function_name\": \"get_horoscope\",\n  \"kwargs\": { \"sign\": \"Aquarius\" }\n}" }
+          ]
+        },
+        {
+          num: 4,
+          shortTitle: "4. Application executes get_horoscope(sign=\"Aquarius\")",
+          dirLabel: "App ↺",
+          dirClass: "dir-self-app",
+          ballPos: "16%",
+          activeSide: "app",
+          packet: "Running Python function...",
+          ownerText: "💻 Ball on Application Side (Execution)",
+          heading: "Step 4: Application Runs the Function in Python",
+          desc: "Using the functional pattern from Course Page 14: tool_result = name_2_tools[tool_called](**arguments).",
+          insight: "⚠️ The Application executes the API/database lookup locally and captures the return string.",
+          messages: [
+            { role: "APPLICATION CODE (Course p. 14)", roleClass: "role-tool", code: "tool_called = \"get_horoscope\"\ntool_result = name_2_tools[tool_called](sign=\"Aquarius\")\n# Result: \"Aquarius: A great day for creative collaborations!\"" }
+          ]
+        },
+        {
+          num: 5,
+          shortTitle: "5. Application calls LLM again with the horoscope result",
+          dirLabel: "App ➔ LLM",
+          dirClass: "dir-to-llm",
+          ballPos: "56%",
+          activeSide: "app",
+          packet: "Observation: Horoscope text",
+          ownerText: "🏓 Second Serve: Application ➔ LLM",
+          heading: "Step 5: Application Sends Observation Back to LLM",
+          desc: "The output of get_horoscope is appended to the conversation context and sent back to the LLM.",
+          insight: "💡 The ping-pong rally continues until the LLM has all observations needed to answer.",
+          messages: [
+            { role: "USER PROMPT", roleClass: "role-user", code: "\"What is today's horoscope for Aquarius?\"" },
+            { role: "ASSISTANT (Tool Call)", roleClass: "role-llm", code: "get_horoscope(sign=\"Aquarius\")" },
+            { role: "TOOL OBSERVATION", roleClass: "role-tool", code: "\"Aquarius: A great day for creative collaborations and new ideas!\"" }
+          ]
+        },
+        {
+          num: 6,
+          shortTitle: "6. LLM formulates the final answer for the user",
+          dirLabel: "LLM ➔ App",
+          dirClass: "dir-to-app",
+          ballPos: "18%",
+          activeSide: "llm",
+          packet: "Final Horoscope Response",
+          ownerText: "🏁 Rally Complete!",
+          heading: "Step 6: LLM Delivers the Final Response",
+          desc: "The LLM integrates the horoscope observation into a friendly response for the user.",
+          insight: "✅ Complete 6-step ping-pong cycle!",
+          messages: [
+            { role: "TOOL OBSERVATION", roleClass: "role-tool", code: "\"Aquarius: A great day for creative collaborations and new ideas!\"" },
+            { role: "ASSISTANT (Final Answer)", roleClass: "role-llm", code: "\"Today's horoscope for Aquarius says it's a great day for creative collaborations and exploring new ideas!\"" }
+          ]
+        }
+      ],
+
+      inalco: [
+        {
+          num: 1,
+          shortTitle: "1. Application calls LLM with prompt & available tools",
+          dirLabel: "App ➔ LLM",
+          dirClass: "dir-to-llm",
+          ballPos: "22%",
+          activeSide: "app",
+          packet: "Prompt + tools[] Schema",
+          ownerText: "🏓 Serve: Application ➔ LLM",
+          heading: "Step 1: Application Sends Prompt + Available Tools",
+          desc: "From Course Page 11: The LLM has access to get_weather(location) and play_song(song_name), but the user asks: \"What is the founding date of INALCO?\"",
+          insight: "💡 Having tools available does NOT mean the LLM must call them on every turn!",
+          messages: [
+            { role: "SYSTEM (Available Tools)", roleClass: "role-sys", code: "Tools: [get_weather(location: str), play_song(song_name: str)]" },
+            { role: "USER PROMPT (Course p. 11)", roleClass: "role-user", code: "\"What is the founding date of INALCO?\"" }
+          ]
+        },
+        {
+          num: 2,
+          shortTitle: "2. LLM Router decides NO tool is relevant to this question",
+          dirLabel: "LLM ↺",
+          dirClass: "dir-self-llm",
+          ballPos: "82%",
+          activeSide: "llm",
+          packet: "Router: No tool needed!",
+          ownerText: "🧠 Ball on LLM Side (Routing Decision)",
+          heading: "Step 2: LLM Router Decides NOT to Call Any Tool",
+          desc: "The LLM inspects its tools (get_weather, play_song). Neither is relevant to historical dates, and the answer is already stored in the LLM's parametric weights.",
+          insight: "💡 Course p. 11: \"If the user asks for the founding date of INALCO, it should be able to answer normally without calling a tool.\"",
+          messages: [
+            { role: "USER PROMPT", roleClass: "role-user", code: "\"What is the founding date of INALCO?\"" },
+            { role: "LLM ROUTER DECISION", roleClass: "role-llm", code: "Check tools: get_weather ❌, play_song ❌\nDecision: Bypass tool calling -> Generate normal free-text response." }
+          ]
+        },
+        {
+          num: 3,
+          shortTitle: "3. LLM responds directly with free-text answer (Rally ends early!)",
+          dirLabel: "LLM ➔ App",
+          dirClass: "dir-to-app",
+          ballPos: "18%",
+          activeSide: "llm",
+          packet: "\"INALCO was founded in 1795.\"",
+          ownerText: "🏁 Direct Return! (Steps 4–6 Skipped)",
+          heading: "Step 3: Direct Free-Text Response (Only 1 LLM Call!)",
+          desc: "Because no tool was invoked, the LLM immediately returns the final answer in plain text. Steps 4, 5, and 6 are completely skipped!",
+          insight: "✅ Compare with the Weather scenario: When no tool is needed, the ping-pong rally finishes in 1 round-trip instead of 2!",
+          messages: [
+            { role: "USER PROMPT", roleClass: "role-user", code: "\"What is the founding date of INALCO?\"" },
+            { role: "ASSISTANT (Direct Free-Text Answer)", roleClass: "role-llm", code: "\"INALCO (Institut national des langues et civilisations orientales) was founded in 1795 (originally as the École spéciale des langues orientales).\"" }
+          ]
+        }
+      ]
+    };
+
+    let currentScenario = "weather";
+    let currentIdx = 0;
+    let playTimer = null;
+    let speedMs = 1800;
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function render() {
+      const steps = SCENARIOS[currentScenario];
+      const st = steps[currentIdx];
+
+      // Update buttons
+      document.getElementById("btn-prev").disabled = currentIdx === 0;
+      document.getElementById("btn-next").disabled = currentIdx === steps.length - 1;
+
+      // Update Scenario buttons
+      ["weather", "horoscope", "inalco"].forEach(k => {
+        document.getElementById(`scen-${k}`).className =
+          k === currentScenario ? "scen-btn active" : "scen-btn";
+      });
+
+      // Update Players Highlight & Ball Position
+      document.getElementById("card-app").classList.toggle("player-active", st.activeSide === "app");
+      document.getElementById("card-llm").classList.toggle("player-active", st.activeSide === "llm");
+
+      const ballWrap = document.getElementById("ball-wrap");
+      ballWrap.style.left = st.ballPos;
+      document.getElementById("ball-icon").textContent = st.num;
+      document.getElementById("ball-label").textContent = st.packet;
+
+      // Render Sequence List
+      const seqList = document.getElementById("seq-list");
+      seqList.innerHTML = "";
+      steps.forEach((item, idx) => {
+        const row = document.createElement("div");
+        const isCur = idx === currentIdx;
+        const isDone = idx < currentIdx;
+        row.className = "seq-row" + (isCur ? " active" : isDone ? " done" : "");
+        row.onclick = () => goToStep(idx);
+        row.innerHTML = `
+          <div class="seq-num">${isDone ? "✓" : item.num}</div>
+          <div class="seq-title">${escapeHtml(item.shortTitle)}</div>
+          <div class="seq-dir mono ${item.dirClass}">${escapeHtml(item.dirLabel)}</div>
+        `;
+        seqList.appendChild(row);
+      });
+
+      // Update Right Explanation Card
+      document.getElementById("step-tag").textContent = `Step ${st.num} of ${steps.length}`;
+      document.getElementById("ball-owner-badge").textContent = st.ownerText;
+      document.getElementById("step-heading").textContent = st.heading;
+      document.getElementById("step-desc").textContent = st.desc;
+      document.getElementById("step-insight").textContent = st.insight;
+
+      // Update Live Messages Stack
+      const stack = document.getElementById("msg-stack");
+      stack.innerHTML = "";
+      st.messages.forEach((m, i) => {
+        const isLast = i === st.messages.length - 1;
+        const b = document.createElement("div");
+        b.className = "msg-bubble" + (isLast ? " latest" : "");
+        b.innerHTML = `
+          <div class="msg-role ${m.roleClass}">
+            <span>${escapeHtml(m.role)}</span>
+            ${isLast ? "<span>● Active</span>" : ""}
+          </div>
+          <pre class="code-block mono">${escapeHtml(m.code)}</pre>
+        `;
+        stack.appendChild(b);
+      });
+    }
+
+    function setScenario(scen) {
+      stopPlay();
+      currentScenario = scen;
+      currentIdx = 0;
+      render();
+    }
+
+    function goToStep(idx) {
+      const steps = SCENARIOS[currentScenario];
+      currentIdx = Math.max(0, Math.min(steps.length - 1, idx));
+      render();
+    }
+
+    function nextStep() {
+      const steps = SCENARIOS[currentScenario];
+      if (currentIdx < steps.length - 1) {
+        currentIdx++;
+        render();
+      } else if (playTimer) {
+        stopPlay();
+      }
+    }
+
+    function prevStep() {
+      if (currentIdx > 0) {
+        currentIdx--;
+        render();
+      }
+    }
+
+    function stopPlay() {
+      if (playTimer) {
+        clearInterval(playTimer);
+        playTimer = null;
+      }
+      const btn = document.getElementById("btn-play");
+      btn.textContent = "▶ Play Rally";
+      btn.className = "btn btn-primary";
+    }
+
+    function togglePlay() {
+      const steps = SCENARIOS[currentScenario];
+      if (playTimer) {
+        stopPlay();
+      } else {
+        if (currentIdx === steps.length - 1) currentIdx = 0;
+        render();
+        const btn = document.getElementById("btn-play");
+        btn.textContent = "⏸ Pause";
+        btn.className = "btn btn-amber";
+        playTimer = setInterval(() => {
+          if (currentIdx < steps.length - 1) {
+            currentIdx++;
+            render();
+          } else {
+            stopPlay();
+          }
+        }, speedMs);
+      }
+    }
+
+    function updateSpeed() {
+      speedMs = Number(document.getElementById("speed-select").value);
+      if (playTimer) {
+        stopPlay();
+        togglePlay();
+      }
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight") nextStep();
+      if (e.key === "ArrowLeft") prevStep();
+      if (e.key === " ") {
+        e.preventDefault();
+        togglePlay();
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
+
